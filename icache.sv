@@ -8,6 +8,7 @@ interface pc_icache;
     bus32_t [1:0]    inst_for_buffer;  // 读 icache 的结果，即给出的指令
     logic            stall_for_buffer;
     bus32_t [1:0]    pc_for_buffer;
+
     logic            front_is_exception;
     logic [6:0]      front_exception_cause;
     logic [1:0]      icache_is_exception;
@@ -27,6 +28,26 @@ interface pc_icache;
         input pc, inst_en, front_is_exception, front_exception_cause, front_fetch_inst_en
     );
 endinterface : pc_icache
+
+interface icache_transaddr;
+    logic                   inst_fetch;    //指令地址转换信息有效的信号assign fetch_en  = inst_valid && inst_addr_ok;
+    logic [31:0] inst_vaddr_a;  //虚拟地址pc
+    logic [31:0] inst_vaddr_b;
+    logic [31:0] ret_inst_paddr_a;  //物理地址pc
+    logic [31:0] ret_inst_paddr_b;  //pc+4
+    logic tlb_exception;
+    logic uncache;
+
+    modport master(
+        input ret_inst_paddr_a, ret_inst_paddr_b, tlb_exception, uncache,
+        output inst_fetch, inst_vaddr_a, inst_vaddr_b
+    );
+
+    modport slave(
+        output ret_inst_paddr_a, ret_inst_paddr_b, tlb_exception, uncache,
+        input inst_fetch, inst_vaddr_a, inst_vaddr_b
+    );
+endinterface : icache_transaddr
 
 
 //cache define
@@ -53,7 +74,6 @@ endinterface : pc_icache
 `define UNCACHE_RETURN 5'b10000
 
 
-
 module icache
     import pipeline_types::*;
 (
@@ -77,11 +97,6 @@ module icache
     input  logic   iucache_rvalid_o,
     input  bus32_t iucache_rdata_o
 );
-
-
-
-
-
     logic [4:0] current_state, next_state;
     logic real_ret_valid, drop_one_ret, real_uncache_ret_valid;
     logic pre_valid;
@@ -253,266 +268,33 @@ module icache
     assign addr_way1b=(!addr_next_idle||pause_icache)?pre_vaddr_b[`INDEX_LOC]:virtual_addrb[`INDEX_LOC];
 
 
-    BRAM bank0_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[0]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[0]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[0]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[0])
-    );
-    BRAM bank1_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[1]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[1]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[1]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[1])
-    );
-    BRAM bank2_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[2]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[2]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[2]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[2])
-    );
-    BRAM bank3_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[3]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[3]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[3]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[3])
-    );
-    BRAM bank4_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[4]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[4]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[4]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[4])
-    );
-    BRAM bank5_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[5]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[5]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[5]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[5])
-    );
-    BRAM bank6_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[6]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[6]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[6]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[6])
-    );
-    BRAM bank7_way0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_way0[7]),
-        .addra(addr_way0a),
-        .douta(way0_cachea[7]),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_way0[7]),
-        .addrb(addr_way0b),
-        .doutb(way0_cacheb[7])
-    );
+    BRAM bank0_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[0]), .addra(addr_way0a), .douta(way0_cachea[0]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[0]), .addrb(addr_way0b), .doutb(way0_cacheb[0]));
+    BRAM bank1_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[1]), .addra(addr_way0a), .douta(way0_cachea[1]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[1]), .addrb(addr_way0b), .doutb(way0_cacheb[1]));
+    BRAM bank2_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[2]), .addra(addr_way0a), .douta(way0_cachea[2]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[2]), .addrb(addr_way0b), .doutb(way0_cacheb[2]));
+    BRAM bank3_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[3]), .addra(addr_way0a), .douta(way0_cachea[3]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[3]), .addrb(addr_way0b), .doutb(way0_cacheb[3]));
+    BRAM bank4_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[4]), .addra(addr_way0a), .douta(way0_cachea[4]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[4]), .addrb(addr_way0b), .doutb(way0_cacheb[4]));
+    BRAM bank5_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[5]), .addra(addr_way0a), .douta(way0_cachea[5]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[5]), .addrb(addr_way0b), .doutb(way0_cacheb[5]));
+    BRAM bank6_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[6]), .addra(addr_way0a), .douta(way0_cachea[6]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[6]), .addrb(addr_way0b), .doutb(way0_cacheb[6]));
+    BRAM bank7_way0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_way0[7]), .addra(addr_way0a), .douta(way0_cachea[7]), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_way0[7]), .addrb(addr_way0b), .doutb(way0_cacheb[7]));
 
-    BRAM bank0_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[0]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[0]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[0]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[0])
-    );
-    BRAM bank1_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[1]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[1]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[1]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[1])
-    );
-    BRAM bank2_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[2]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[2]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[2]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[2])
-    );
-    BRAM bank3_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[3]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[3]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[3]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[3])
-    );
-    BRAM bank4_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[4]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[4]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[4]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[4])
-    );
-    BRAM bank5_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[5]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[5]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[5]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[5])
-    );
-    BRAM bank6_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[6]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[6]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[6]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[6])
-    );
-    BRAM bank7_way1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_way1[7]),
-        .addra(addr_way1a),
-        .douta(way1_cachea[7]),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_way1[7]),
-        .addrb(addr_way1b),
-        .doutb(way1_cacheb[7])
-    );
+    BRAM bank0_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[0]), .addra(addr_way1a), .douta(way1_cachea[0]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[0]), .addrb(addr_way1b), .doutb(way1_cacheb[0]));
+    BRAM bank1_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[1]), .addra(addr_way1a), .douta(way1_cachea[1]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[1]), .addrb(addr_way1b), .doutb(way1_cacheb[1]));
+    BRAM bank2_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[2]), .addra(addr_way1a), .douta(way1_cachea[2]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[2]), .addrb(addr_way1b), .doutb(way1_cacheb[2]));
+    BRAM bank3_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[3]), .addra(addr_way1a), .douta(way1_cachea[3]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[3]), .addrb(addr_way1b), .doutb(way1_cacheb[3]));
+    BRAM bank4_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[4]), .addra(addr_way1a), .douta(way1_cachea[4]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[4]), .addrb(addr_way1b), .doutb(way1_cacheb[4]));
+    BRAM bank5_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[5]), .addra(addr_way1a), .douta(way1_cachea[5]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[5]), .addrb(addr_way1b), .doutb(way1_cacheb[5]));
+    BRAM bank6_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[6]), .addra(addr_way1a), .douta(way1_cachea[6]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[6]), .addrb(addr_way1b), .doutb(way1_cacheb[6]));
+    BRAM bank7_way1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_way1[7]), .addra(addr_way1a), .douta(way1_cachea[7]), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_way1[7]), .addrb(addr_way1b), .doutb(way1_cacheb[7]));
 
+    //给存储TAG+V的BRAM的新增输入信号
     logic [`DATA_SIZE-1:0] data_to_write_tagv0, data_to_write_tagv1;
     logic [`TAG_SIZE-1:0] tag_to_write_tagv;
     assign tag_to_write_tagv=(current_state==`ASKMEM1)?pre_physical_addr_a[`TAG_LOC]:pre_physical_addr_b[`TAG_LOC];
     assign data_to_write_tagv0 = {11'b0, 1'b1, tag_to_write_tagv};
     assign data_to_write_tagv1 = {11'b0, 1'b1, tag_to_write_tagv};
     logic [`DATA_SIZE-1:0] way0_tagva, way0_tagvb, way1_tagva, way1_tagvb;
-    BRAM tagv0 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way0_a),
-        .dina (data_to_write_tagv0),
-        .addra(addr_way0a),
-        .douta(way0_tagva),
-        .enb  (1'b1),
-        .web  (wea_way0_b),
-        .dinb (data_to_write_tagv0),
-        .addrb(addr_way0b),
-        .doutb(way0_tagvb)
-    );
-    BRAM tagv1 (
-        .clka (clk),
-        .clkb (clk),
-        .ena  (1'b1),
-        .wea  (wea_way1_a),
-        .dina (data_to_write_tagv1),
-        .addra(addr_way1a),
-        .douta(way1_tagva),
-        .enb  (1'b1),
-        .web  (wea_way1_b),
-        .dinb (data_to_write_tagv1),
-        .addrb(addr_way1b),
-        .doutb(way1_tagvb)
-    );
+    BRAM tagv0 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way0_a), .dina (data_to_write_tagv0), .addra(addr_way0a), .douta(way0_tagva), .enb  (1'b1), .web  (wea_way0_b), .dinb (data_to_write_tagv0), .addrb(addr_way0b), .doutb(way0_tagvb));
+    BRAM tagv1 ( .clka (clk), .clkb (clk), .ena  (1'b1), .wea  (wea_way1_a), .dina (data_to_write_tagv1), .addra(addr_way1a), .douta(way1_tagva), .enb  (1'b1), .web  (wea_way1_b), .dinb (data_to_write_tagv1), .addrb(addr_way1b), .doutb(way1_tagvb));
 
     //根据输出判断命中
     logic a_hit_way0, a_hit_way1, b_hit_way0, b_hit_way1;
@@ -543,6 +325,7 @@ module icache
     assign replace_index=(current_state==`ASKMEM1)?pre_physical_addr_a[`INDEX_LOC]:((current_state==`ASKMEM2)?pre_physical_addr_b[`INDEX_LOC]:`INDEX_SIZE'b1111111);
     assign LRU_pick = LRU[replace_index];
 
+    //处理输出
     //to cache_axi
     assign rd_req=((current_state==`ASKMEM1)||(current_state==`ASKMEM2))&&!paused_ret_valid&&!ret_valid&&!branch_flush;
     assign rd_addr = (current_state == `ASKMEM1) ? pre_physical_addr_a : pre_physical_addr_b;
@@ -580,5 +363,4 @@ module icache
             pc2icache.icache_fetch_inst_en <= {icache2transaddr.uncache ? 0 : pre_valid, pre_valid};
         end
     end
-
 endmodule
